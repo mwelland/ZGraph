@@ -5,6 +5,7 @@ from typing import List, Union, Optional
 from . import functional as F
 from .base import ZGraphNode
 from .leaf_nodes import ConstantNode
+from .constants import DEFAULT_MATMUL_MIN_BETA
 
 class TropicalPolynomialNode(ZGraphNode):
     """
