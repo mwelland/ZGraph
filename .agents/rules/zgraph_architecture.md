@@ -1,7 +1,7 @@
 # ZGraph AI Directives
 
 **ATTENTION AI CODING ASSISTANTS:**
-Modify `zgraph` strictly following these rules (see `zgraph/src/zgraph/ARCHITECTURE.md`):
+Modify `zgraph` strictly following these rules (see `src/zgraph/ARCHITECTURE.md`):
 
 1. **Probabilistic Graphical Model (PGM) First**: `zgraph` is fundamentally a PGM engine simulating log-categorical distributions.
 2. **Architectural Division (Core vs Transforms vs Solvers)**:
