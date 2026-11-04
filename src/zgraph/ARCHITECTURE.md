@@ -51,7 +51,7 @@ To prevent breaking JAX/Equinox native `vmap` and `jax.jit` compatibility, all c
 
 6. **Clean Code & Strict Typing:**
    All functions and methods must use explicit type hints from the built-in `typing` module (e.g., `List`, `Optional`, `Tuple`, `Union`).
-   - *Reason:* Strict typing ensures that downstream wrappers (like Thermograph), IDEs, and future AI agents can parse and safely interact with the math engine without ambiguity.
+   - *Reason:* Strict typing ensures that downstream wrappers (like ThermoGraph), IDEs, and future AI agents can parse and safely interact with the math engine without ambiguity.
 
 ---
 

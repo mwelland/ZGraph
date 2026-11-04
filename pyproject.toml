@@ -32,9 +32,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/themintlab/Zgraph"
-Repository = "https://github.com/themintlab/Zgraph"
-"Bug Tracker" = "https://github.com/themintlab/Zgraph/issues"
+Homepage = "https://github.com/themintlab/ZGraph"
+Repository = "https://github.com/themintlab/ZGraph"
+"Bug Tracker" = "https://github.com/themintlab/ZGraph/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

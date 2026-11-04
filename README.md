@@ -1,6 +1,6 @@
 # ZGraph
 
-[![Unit Tests](https://github.com/themintlab/Zgraph/actions/workflows/unit-tests.yml/badge.svg?branch=main)](https://github.com/themintlab/Zgraph/actions/workflows/unit-tests.yml)
+[![Unit Tests](https://github.com/themintlab/ZGraph/actions/workflows/unit-tests.yml/badge.svg?branch=main)](https://github.com/themintlab/ZGraph/actions/workflows/unit-tests.yml)
 
 **A hardware-accelerated, fully differentiable, physics-free soft-tropical tensor graph engine.**
 
@@ -14,7 +14,7 @@
 
 The engine operates exclusively on unlabeled numerical tensors (`jax.Array`). It contains zero domain-specific logic, zero unit conversions, and zero Python object overhead (such as string matching or dictionary lookups inside loops). 
 
-All physical nomenclature, thermodynamic ensembles, chemical potential mappings ($\mu$), state variables ($T, P$), phase definitions, and human-readable metadata are relegated to higher-level application layers such as [**Thermograph**](https://github.com/themintlab/ThermoGraph).
+All physical nomenclature, thermodynamic ensembles, chemical potential mappings ($\mu$), state variables ($T, P$), phase definitions, and human-readable metadata are relegated to higher-level application layers such as [**ThermoGraph**](https://github.com/themintlab/ThermoGraph).
 
 ### Separation of Concerns
 
@@ -79,9 +79,9 @@ free_energy = factor_node(signals)   # Fully differentiable scalar tensor output
 
 Explore interactive Jupyter notebooks running natively on Google Colab:
 
-- **2D Binary Equilibrium** (`binary.ipynb`): [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/themintlab/Zgraph/blob/main/examples/binary.ipynb)
-- **3D Extruded Dimension** (`Extruded_dimension.ipynb`): [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/themintlab/Zgraph/blob/main/examples/Extruded_dimension.ipynb)
-- **Stoichiometric Equilibrium** (`stoichiometric.ipynb`): [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/themintlab/Zgraph/blob/main/examples/stoichiometric.ipynb)
+- **2D Binary Equilibrium** (`binary.ipynb`): [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/themintlab/ZGraph/blob/main/examples/binary.ipynb)
+- **3D Extruded Dimension** (`Extruded_dimension.ipynb`): [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/themintlab/ZGraph/blob/main/examples/Extruded_dimension.ipynb)
+- **Stoichiometric Equilibrium** (`stoichiometric.ipynb`): [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/themintlab/ZGraph/blob/main/examples/stoichiometric.ipynb)
 
 See [examples/README.md](examples/README.md) for detailed descriptions.
 
@@ -89,4 +89,4 @@ See [examples/README.md](examples/README.md) for detailed descriptions.
 
 ## 🔗 Application Layer
 
-For thermodynamic potential evaluation, materials modeling, phase diagram construction, and user-facing APIs, please see the [**Thermograph**](https://github.com/themintlab/ThermoGraph) repository.
+For thermodynamic potential evaluation, materials modeling, phase diagram construction, and user-facing APIs, please see the [**ThermoGraph**](https://github.com/themintlab/ThermoGraph) repository.
