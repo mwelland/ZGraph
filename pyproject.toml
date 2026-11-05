@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "zgraph"
 version = "0.1.0"
-description = "A hardware-accelerated, fully differentiable soft-tropical tensor engine for high-throughput statistical mechanics."
+description = "A hardware-accelerated, differentiable soft-tropical sum-product network and convex optimization engine."
 authors = [
   { name="Mike Welland", email="mike@mikewelland.com" }
 ]
 readme = "README.md"
 license = { file="LICENSE" }
 requires-python = ">=3.9"
-keywords = ["thermodynamics", "tensor-graph", "jax", "materials-science"]
+keywords = ["soft-tropical", "factor-graph", "sum-product-network", "jax", "convex-optimization"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",

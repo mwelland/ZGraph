@@ -9,7 +9,7 @@ def test_factor_node_matches_expected_logsumexp():
     node = FactorNode(
         M_matrix=jnp.array([[1.0, 0.0], [0.0, 1.0]]),
         subgraph_list=[ConstantNode(1.0), ConstantNode(2.0)],
-        beta=1.0,
+        tau=1.0,
     )
 
     result = node(jnp.array([0.0]))
@@ -38,7 +38,7 @@ def test_factor_node_accepts_1d_matrix_by_unsqueezing():
     node = FactorNode(
         M_matrix=jnp.array([1.0, 1.0]),
         subgraph_list=[ConstantNode(1.5), ConstantNode(0.5)],
-        beta=1.0,
+        tau=1.0,
     )
 
     result = node(jnp.array([0.0]))
@@ -47,24 +47,24 @@ def test_factor_node_accepts_1d_matrix_by_unsqueezing():
     assert jnp.allclose(result, expected, atol=1e-6)
 
 
-def test_factor_node_rejects_invalid_beta_type():
-    with pytest.raises(TypeError, match="beta must be"):
+def test_factor_node_rejects_invalid_tau_type():
+    with pytest.raises(TypeError, match="tau must be"):
         FactorNode(
             M_matrix=jnp.array([[1.0]]),
             subgraph_list=[ConstantNode(1.0)],
-            beta="invalid",
+            tau="invalid",
         )
 
 
-def test_factor_node_clamps_zero_beta_to_minimum():
+def test_factor_node_exact_zero_tau_limit():
     node = FactorNode(
         M_matrix=jnp.array([[1.0, 0.0], [0.0, 1.0]]),
         subgraph_list=[ConstantNode(0.0), ConstantNode(0.0)],
-        beta=0.0,
+        tau=0.0,
     )
 
     result = node(jnp.array([0.0]))
-    expected = FactorNode._MIN_BETA * jnp.log(jnp.array(2.0))
+    expected = jnp.array(0.0)
 
     assert jnp.isfinite(result)
     assert jnp.allclose(result, expected, atol=1e-10)

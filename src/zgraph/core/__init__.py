@@ -1,40 +1,52 @@
+from .base import ZGraphNode, Ensemble
 from .tropical_nodes import (
-    TropicalPolynomialNode, 
-    TropicalMatMulNode
+    TropicalPolynomialNode,
+    TropicalMatMulNode,
 )
 from .utility_nodes import PiecewiseNode, StandardProductNode
 from .leaf_nodes import ConstantNode, SignalNode, SignalNodes
+from .functional import marginalize
 
 import jax.numpy as jnp
 
-# Convenience Aliases for users wanting standard probability/math naming
+# Convenience Aliases for standard probability/math naming
 FactorNode = TropicalPolynomialNode
 ProductNode = StandardProductNode
 MatMulNode = TropicalMatMulNode
 
-# Backwards compatibility wrappers
+
 def AdditionNode(subgraph_list, weights=None):
     if weights is None:
-        weights = jnp.ones(len(subgraph_list), dtype=jnp.float32)
-    else:
-        weights = jnp.array(weights, dtype=jnp.float32)
+        weights = jnp.ones(len(subgraph_list), dtype=float)
+    elif not (isinstance(weights, jnp.ndarray) and jnp.issubdtype(weights.dtype, jnp.floating)):
+        weights = jnp.asarray(weights, dtype=float)
     M = jnp.expand_dims(weights, 0)
     return TropicalPolynomialNode(M_matrix=M, subgraph_list=subgraph_list)
 
+
 def DivisionNode(numerator, denominator):
-    return TropicalPolynomialNode(M_matrix=jnp.array([[1.0, -1.0]], dtype=jnp.float32), subgraph_list=[numerator, denominator])
+    return TropicalPolynomialNode(
+        M_matrix=jnp.asarray([[1.0, -1.0]], dtype=float),
+        subgraph_list=[numerator, denominator],
+    )
+
 
 from .constants import TROPICAL_ZERO_BARRIER
 
+
 def TropicalZeroNode(barrier_value=TROPICAL_ZERO_BARRIER):
-    """Tropical Zero Element (for ⊕). Represented as a sufficiently high constant barrier."""
+    """Tropical Zero Element (for ⊕_tau). Represented as -inf (additive identity of LSE)."""
     return ConstantNode(barrier_value)
+
 
 def TropicalIdentityNode():
     """Tropical Identity Element (for ⊗). Represented as constant 0.0."""
     return ConstantNode(0.0)
 
+
 __all__ = [
+    "ZGraphNode",
+    "Ensemble",
     "FactorNode",
     "ProductNode",
     "AdditionNode",
@@ -49,4 +61,5 @@ __all__ = [
     "ConstantNode",
     "SignalNode",
     "SignalNodes",
+    "marginalize",
 ]

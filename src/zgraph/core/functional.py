@@ -1,39 +1,45 @@
 import jax
 import jax.numpy as jnp
-from jax.scipy.special import logsumexp
-from typing import Tuple, Union
+from typing import Union
+from .constants import MIN_SAFE_TAU
 
-def marginalize(microstates: jax.Array, beta: Union[float, jax.Array] = 1.0) -> jax.Array:
+
+def marginalize(
+    branch_potentials: jax.Array,
+    tau: Union[float, jax.Array] = 1.0,
+) -> jax.Array:
     """
     The stateless mathematical core of the ZGraph engine.
-    Executes the SoftMin collapse (Partition Function).
-    
+    Executes the soft-tropical LogSumExp reduction:
+        z^+ = tau * LSE(branch_potentials / tau)
+            = z_max^+ + tau * ln(sum_i exp((branch_potentials_i - z_max^+) / tau))
+
     Args:
-        energy_landscape (jax.Array): The dynamic Energy Vector across microstates.
-                                         Shape: (..., Num_Microstates)
-        beta (Union[float, jax.Array]): The thermodynamic smoothing parameter (-kT).
-                                           beta -> 0 triggers hardmax (T->0 limit).
-                                           Shape: () (Scalar)
-                                 
+        branch_potentials (jax.Array): Uncollapsed branch potentials (M z + tau g).
+            Shape: (..., K)
+        tau (Union[float, jax.Array]): Non-negative scale parameter tau in [0, inf).
+            tau -> 0^+ recovers the exact hard-tropical max_i branch_potentials_i.
+            Shape: () (Scalar)
+
     Returns:
-        jax.Array: The renormalized scalar Free Energy. Shape: (...,)
+        jax.Array: The scalar outgoing log-potential z^+. Shape: (...,)
     """
-    # The 1-state bypass is optimal for JAX (resolved at JIT-compile time, zero GPU overhead)
-    # and safely prevents inf * 0 = NaN cases when beta=inf.
-    if microstates.shape[-1] == 1:
-        return jnp.squeeze(microstates, axis=-1)
-        
-    # Explicit logsumexp formulation for numerical stability.
-    # By subtracting the max BEFORE dividing by beta, we prevent float32 overflows
-    # that occur when beta is very small and energy is large.
-    energy_max = jnp.max(microstates, axis=-1, keepdims=True)
-    
-    from .constants import MIN_SAFE_BETA
-    safe_beta = jnp.where(beta == 0.0, MIN_SAFE_BETA, beta)
-    
-    centered_energy = (microstates - energy_max) / safe_beta
-    sum_exp = jnp.sum(jnp.exp(centered_energy), axis=-1, keepdims=True)
-    
-    res = energy_max + beta * jnp.log(sum_exp)
-    
+    # Static compile-time bypass for K=1 (resolved at JIT trace time, zero runtime overhead)
+    if branch_potentials.shape[-1] == 1:
+        return jnp.squeeze(branch_potentials, axis=-1)
+
+    # Shifted LogSumExp decomposition (Eq. 2.6):
+    # Subtracting z_max^+ before dividing by safe_tau bounds all exponential
+    # arguments in (-inf, 0], preventing overflow across all scales tau >= 0.
+    z_max = jnp.max(branch_potentials, axis=-1, keepdims=True)
+    all_neg_inf = jnp.isneginf(z_max)
+    safe_z_max = jnp.where(all_neg_inf, 0.0, z_max)
+
+    safe_tau = jnp.maximum(tau, MIN_SAFE_TAU)
+
+    centered = (branch_potentials - safe_z_max) / safe_tau
+    sum_exp = jnp.sum(jnp.exp(centered), axis=-1, keepdims=True)
+
+    res = jnp.where(all_neg_inf, -jnp.inf, safe_z_max + tau * jnp.log(sum_exp))
+
     return jnp.squeeze(res, axis=-1)

@@ -1,26 +1,27 @@
 import jax
 import jax.numpy as jnp
 import equinox as eqx
-from typing import Optional, Union, List, Callable, Dict, Any, Tuple
+from typing import Union, Any
 from jax.tree_util import tree_map
 from .base import ZGraphNode, Ensemble
 
 
 class ConstantNode(ZGraphNode):
-    """The simplest physics model: a trainable constant (or constants)."""
+    """The simplest leaf model: a trainable or fixed scalar/tensor constant."""
     value: jax.Array
 
     def __init__(self, init_val: Union[float, int, jax.Array] = 1.0):
-        if isinstance(init_val, jax.Array):
-            self.value = init_val.astype(jnp.float32)
+        if isinstance(init_val, jax.Array) and jnp.issubdtype(init_val.dtype, jnp.floating):
+            self.value = init_val
         else:
-            self.value = jnp.array(init_val, dtype=jnp.float32)
+            self.value = jnp.asarray(init_val, dtype=float)
 
     def evaluate(self, signals: jax.Array) -> jax.Array:
         return self.value
-    
+
+
 class SignalNode(ZGraphNode):
-    """A node that extracts specific signal indices from the input."""
+    """A node that extracts a specific signal index from the input vector."""
     signal_index: int = eqx.field(static=True)
 
     def __init__(self, signal_index: int):
@@ -32,6 +33,7 @@ class SignalNode(ZGraphNode):
 
     def evaluate(self, local_signals: jax.Array) -> jax.Array:
         return local_signals[self.signal_index]
+
 
 def SignalNodes(*indices: Any) -> Any:
     """

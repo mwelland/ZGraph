@@ -5,120 +5,149 @@ from typing import List, Union, Optional
 from . import functional as F
 from .base import ZGraphNode
 from .leaf_nodes import ConstantNode
-from .constants import DEFAULT_MATMUL_MIN_BETA
+from .constants import MIN_SAFE_TAU
+
 
 class TropicalPolynomialNode(ZGraphNode):
     """
-    Tropical Polynomial.
-    Computes a full tropical polynomial by performing a dense linear transformation
-    (Tropical Products) followed by a logsumexp collapse (Tropical Addition).
+    Soft-Tropical Sum-Product Node (FactorNode).
+    Computes the fused soft-tropical operator:
+        z^+(z) = tau * LSE(tau^{-1} M z + g)
+    by performing a linear incidence projection (z_i^+ = (M z)_i) followed by
+    a degeneracy-shifted, scale-parameterized LogSumExp reduction.
     """
-    _MIN_BETA: float = eqx.field(static=True, default=DEFAULT_MATMUL_MIN_BETA)
-    
     M: jax.Array
-    beta: eqx.Module
+    tau: eqx.Module
+    g: Optional[jax.Array]
     subgraphs: List[eqx.Module]
 
-    def __init__(self, 
-                 M_matrix: Optional[Union[jax.Array, List[List[float]]]] = None, 
-                 subgraph_list: Optional[List[eqx.Module]] = None, 
-                 beta: Optional[Union[eqx.Module, float, int, jax.Array]] = None):
+    def __init__(
+        self,
+        M_matrix: Optional[Union[jax.Array, List[List[float]], List[float]]] = None,
+        subgraph_list: Optional[List[eqx.Module]] = None,
+        tau: Optional[Union[eqx.Module, float, int, jax.Array]] = None,
+        g: Optional[Union[jax.Array, List[float]]] = None,
+    ):
         if subgraph_list is None:
             subgraph_list = []
-            
+
         if M_matrix is None:
-            M_matrix_tensor = jnp.eye(len(subgraph_list), dtype=jnp.float32)
-        elif isinstance(M_matrix, list):
-            M_matrix_tensor = jnp.array(M_matrix, dtype=jnp.float32)
+            M_matrix_tensor = jnp.eye(len(subgraph_list), dtype=float)
+        elif isinstance(M_matrix, jax.Array) and jnp.issubdtype(M_matrix.dtype, jnp.floating):
+            M_matrix_tensor = M_matrix
         else:
-            M_matrix_tensor = jnp.array(M_matrix, dtype=jnp.float32)
-        
+            M_matrix_tensor = jnp.asarray(M_matrix, dtype=float)
+
         if M_matrix_tensor.ndim == 1:
             M_matrix_tensor = jnp.expand_dims(M_matrix_tensor, 0)
-        
+
         if M_matrix_tensor.ndim != 2:
             raise ValueError(f"M_matrix must be a 2D tensor, got {M_matrix_tensor.ndim}D.")
-            
-        num_clusters = M_matrix_tensor.shape[1]
-        if num_clusters != len(subgraph_list):
+
+        num_factors = M_matrix_tensor.shape[1]
+        if num_factors != len(subgraph_list):
             raise ValueError(
-                f"Dimension mismatch: M_matrix expects {num_clusters} clusters (columns), "
+                f"Dimension mismatch: M_matrix expects {num_factors} factors (columns), "
                 f"but received {len(subgraph_list)} subgraphs."
             )
 
         self.M = M_matrix_tensor
-        
-        if beta is None:
-            self.beta = ConstantNode(1.0)
-        elif isinstance(beta, (int, float, jax.Array)):
-            self.beta = ConstantNode(beta)
-        elif isinstance(beta, eqx.Module):
-            self.beta = beta
+
+        if tau is None:
+            self.tau = ConstantNode(1.0)
+        elif isinstance(tau, (int, float, jax.Array)):
+            self.tau = ConstantNode(tau)
+        elif isinstance(tau, eqx.Module):
+            self.tau = tau
         else:
-            raise TypeError("beta must be an eqx.Module, a numeric value (int/float), or a scalar jax.Array.")
-            
+            raise TypeError("tau must be an eqx.Module, a numeric value (int/float), or a scalar jax.Array.")
+
+        if g is None:
+            self.g = None
+        else:
+            if isinstance(g, jax.Array) and jnp.issubdtype(g.dtype, jnp.floating):
+                g_tensor = g
+            else:
+                g_tensor = jnp.asarray(g, dtype=float)
+            if g_tensor.ndim != 1 or g_tensor.shape[0] != M_matrix_tensor.shape[0]:
+                raise ValueError(
+                    f"g must be a 1D vector of length {M_matrix_tensor.shape[0]} matching M_matrix rows, "
+                    f"got shape {g_tensor.shape}."
+                )
+            self.g = g_tensor
+
         self.subgraphs = list(subgraph_list)
 
     def logits(self, signals: jax.Array) -> jax.Array:
-        w = jnp.stack([subgraph(signals) for subgraph in self.subgraphs], axis=-1)
-        return jnp.matmul(self.M, w)
-    
+        """
+        Evaluates the uncollapsed degeneracy-shifted branch potentials:
+            z_i^+ + tau * g_i = (M z)_i + tau * g_i
+        """
+        z = jnp.stack([subgraph(signals) for subgraph in self.subgraphs], axis=-1)
+        branch_z = jnp.matmul(self.M, z)
+        if self.g is not None:
+            tau_val = self.tau(signals)
+            branch_z = branch_z + tau_val * self.g
+        return branch_z
+
     def probabilities(self, signals: jax.Array) -> jax.Array:
-        energy_landscape = self.logits(signals)
-        beta_val = jnp.maximum(self.beta(signals), self._MIN_BETA)
-        return jax.nn.softmax(energy_landscape / beta_val, axis=-1)
+        """
+        Evaluates the branch softmax probability vector p in Delta^{K-1}:
+            p = softmax(tau^{-1} M z + g)
+        """
+        branch_z = self.logits(signals)
+        tau_val = jnp.maximum(self.tau(signals), MIN_SAFE_TAU)
+        z_max = jnp.max(branch_z, axis=-1, keepdims=True)
+        safe_z_max = jnp.where(jnp.isneginf(z_max), 0.0, z_max)
+        return jax.nn.softmax((branch_z - safe_z_max) / tau_val, axis=-1)
 
     def evaluate(self, local_signals: jax.Array) -> jax.Array:
-        energy_landscape = self.logits(local_signals)
-        beta_val = jnp.maximum(self.beta(local_signals), self._MIN_BETA)
-        return F.marginalize(energy_landscape, beta_val)
+        branch_z = self.logits(local_signals)
+        tau_val = self.tau(local_signals)
+        return F.marginalize(branch_z, tau_val)
 
-
-
-
-
-from .constants import DEFAULT_MATMUL_MIN_BETA
 
 class TropicalMatMulNode(ZGraphNode):
     """
-    Tropical Matrix Multiplication (Min-Sum / Soft-Min-Sum).
-    C_{ij} = ⨁_k (A_{ik} ⊗ B_{kj}) => logsumexp_k(A_{ik} + B_{kj})
-    Acts as a routing or message-passing layer between distinct sets of microstates.
+    Soft-Tropical Matrix Multiplication:
+        C_{ij} = ⊕_{tau, k} (A_{ik} ⊗ B_{kj}) = tau * LSE_k((A_{ik} + B_{kj}) / tau)
+    Acts as a routing or message-passing layer between sets of states.
     """
-    _MIN_BETA: float = eqx.field(static=True, default=DEFAULT_MATMUL_MIN_BETA)
     node_A: eqx.Module
     node_B: eqx.Module
-    beta: eqx.Module
+    tau: eqx.Module
 
-    def __init__(self, node_A: eqx.Module, node_B: eqx.Module, 
-                 beta: Optional[Union[eqx.Module, float, int, jax.Array]] = None):
+    def __init__(
+        self,
+        node_A: eqx.Module,
+        node_B: eqx.Module,
+        tau: Optional[Union[eqx.Module, float, int, jax.Array]] = None,
+    ):
         if not isinstance(node_A, eqx.Module) or not isinstance(node_B, eqx.Module):
             raise TypeError("Both node_A and node_B must be eqx.Module instances.")
         self.node_A = node_A
         self.node_B = node_B
-        
-        if beta is None:
-            self.beta = ConstantNode(1.0)
-        elif isinstance(beta, (int, float, jax.Array)):
-            self.beta = ConstantNode(beta)
-        elif isinstance(beta, eqx.Module):
-            self.beta = beta
+
+        if tau is None:
+            self.tau = ConstantNode(1.0)
+        elif isinstance(tau, (int, float, jax.Array)):
+            self.tau = ConstantNode(tau)
+        elif isinstance(tau, eqx.Module):
+            self.tau = tau
         else:
-            raise TypeError("beta must be an eqx.Module, a numeric value (int/float), or a scalar jax.Array.")
+            raise TypeError("tau must be an eqx.Module, a numeric value (int/float), or a scalar jax.Array.")
 
     def evaluate(self, local_signals: jax.Array) -> jax.Array:
         A = self.node_A(local_signals)
         B = self.node_B(local_signals)
-        
+
         A_expanded = jnp.expand_dims(A, axis=-1)
         B_expanded = jnp.expand_dims(B, axis=-3)
-        
+
         summed = A_expanded + B_expanded
-        
-        # Move K to last axis for marginalize
+
+        # Move contraction index k to last axis for marginalize
         summed_k_last = jnp.moveaxis(summed, -2, -1)
-        
-        beta_val = jnp.maximum(self.beta(local_signals), self._MIN_BETA)
-        return F.marginalize(summed_k_last, beta_val)
 
-
+        tau_val = self.tau(local_signals)
+        return F.marginalize(summed_k_last, tau_val)

@@ -1,15 +1,10 @@
-"""
-Centralized numerical constants and limits for the ZGraph engine.
-"""
+# Numerical barrier used to represent the tropical additive identity (-infinity)
+# in max-plus soft-tropical algebra while avoiding IEEE 0.0 * (-inf) = NaN
+# during matrix multiplication M @ x.
+TROPICAL_ZERO_BARRIER = -1e30
 
-# A sufficiently high energy value representing an infinite potential barrier (Tropical Zero).
-# Used to dynamically mask out forbidden microstates or unreachable phases.
-TROPICAL_ZERO_BARRIER = 1e9
-
-# The absolute minimum allowable beta parameter to prevent division by zero
-# during explicit logsumexp formulations (T -> 0 hardmax limit).
-MIN_SAFE_BETA = 1e-10
-
-# The default minimum beta applied as a floor in Soft-Min-Sum tensor contractions
-# (TropicalMatMulNode) to guarantee gradient stability.
-DEFAULT_MATMUL_MIN_BETA = 1e-4
+# Minimum denominator floor for scale parameter tau in shifted LogSumExp:
+# tau * log(sum(exp((z_i - z_max) / max(tau, MIN_SAFE_TAU)))).
+# Using 1e-12 ensures 1 / safe_tau^3 stays below float32 max (~3.4e38)
+# so 1st and 2nd derivatives at tau = 0.0 never overflow to NaN.
+MIN_SAFE_TAU = 1e-12

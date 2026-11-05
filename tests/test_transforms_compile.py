@@ -1,9 +1,9 @@
-import pytest
-import jax.numpy as jnp
+import equinox as eqx
 import jax
+import jax.numpy as jnp
 
 from zgraph import FactorNode, SignalNodes
-from zgraph.transforms import graph_to_function, legendre_transform
+from zgraph.transforms import legendre_transform
 
 
 def _build_binary_graph():
@@ -16,9 +16,9 @@ def _build_binary_graph():
     mu1b = FactorNode([-1], [mu1])
     mu2b = FactorNode([1, -1], [rt, mu2])
 
-    phase_a = FactorNode(jnp.eye(2), [mu1a, mu2a], beta=rt)
-    phase_b = FactorNode(jnp.eye(2), [mu1b, mu2b], beta=rt)
-    system = FactorNode(jnp.eye(2), [phase_a, phase_b], beta=0)
+    phase_a = FactorNode(jnp.eye(2), [mu1a, mu2a], tau=rt)
+    phase_b = FactorNode(jnp.eye(2), [mu1b, mu2b], tau=rt)
+    system = FactorNode(jnp.eye(2), [phase_a, phase_b], tau=0)
     return phase_a, phase_b, system
 
 
@@ -31,17 +31,13 @@ def test_graph_and_legendre_paths_compile_and_execute():
     t_flat = jnp.broadcast_to(t_val, mu1_vals.shape)
     input_tensor = jnp.stack([t_flat, mu1_vals, mu2_vals], axis=-1)
 
-    phase_a_fn, phase_b_fn, system_fn = graph_to_function(
-        [phase_a, phase_b, system],
-        compile=True,
-    )
+    phase_a_fn, phase_b_fn, system_fn = [
+        eqx.filter_jit(f) for f in (phase_a, phase_b, system)
+    ]
     base_out = system_fn(input_tensor)
 
     legendre_modules = legendre_transform([phase_a, phase_b, system], [1, 2])
-    leg_a_fn, leg_b_fn, leg_s_fn = graph_to_function(
-        legendre_modules,
-        compile=True,
-    )
+    leg_a_fn, leg_b_fn, leg_s_fn = [eqx.filter_jit(f) for f in legendre_modules]
     psi, x_dual = leg_s_fn(input_tensor)
 
     assert base_out.shape == (32,)
