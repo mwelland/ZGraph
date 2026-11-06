@@ -85,9 +85,9 @@ jobs:
     name: Publish to PyPI
     needs: [check, build]
     runs-on: ubuntu-latest
-    # Requires approval from the reviewers configured on the "pypi" environment.
+    # Requires approval from the reviewers configured on the "PyPi publishing" environment.
     environment:
-      name: pypi
+      name: PyPi publishing
       url: https://pypi.org/project/${{ needs.check.outputs.name }}/${{ needs.check.outputs.version }}/
     steps:
       - uses: actions/download-artifact@v4
