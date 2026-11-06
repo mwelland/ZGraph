@@ -85,12 +85,10 @@ jobs:
     name: Publish to PyPI
     needs: [check, build]
     runs-on: ubuntu-latest
-    # Requires approval from the reviewers configured on the "pypi" environment.
+    # Requires approval from the reviewers configured on the "PyPi publishing" environment.
     environment:
-      name: pypi
+      name: PyPi publishing
       url: https://pypi.org/project/${{ needs.check.outputs.name }}/${{ needs.check.outputs.version }}/
-    permissions:
-      id-token: write
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -98,6 +96,9 @@ jobs:
           path: dist/
 
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}
 
   release:
     name: Tag and create GitHub release
