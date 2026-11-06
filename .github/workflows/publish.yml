@@ -1,0 +1,120 @@
+name: Publish to PyPI
+
+# Runs when pyproject.toml changes on main. Publishes only if the version in
+# pyproject.toml is not already on PyPI, so bumping the version is the release.
+on:
+  push:
+    branches: [main]
+    paths: [pyproject.toml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check version
+    runs-on: ubuntu-latest
+    outputs:
+      name: ${{ steps.version.outputs.name }}
+      version: ${{ steps.version.outputs.version }}
+      publish: ${{ steps.version.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compare version with PyPI
+        id: version
+        run: |
+          python - <<'EOF' >> "$GITHUB_OUTPUT"
+          import tomllib, urllib.request, urllib.error
+
+          with open("pyproject.toml", "rb") as f:
+              project = tomllib.load(f)["project"]
+          name, version = project["name"], project["version"]
+
+          try:
+              urllib.request.urlopen(f"https://pypi.org/pypi/{name}/{version}/json")
+              exists = True
+          except urllib.error.HTTPError as e:
+              if e.code != 404:
+                  raise
+              exists = False
+
+          print(f"name={name}")
+          print(f"version={version}")
+          print(f"publish={'false' if exists else 'true'}")
+          EOF
+          cat "$GITHUB_OUTPUT"
+
+  build:
+    name: Test and build
+    needs: check
+    if: needs.check.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip build twine pytest
+          pip install -e .
+
+      - name: Run unit tests
+        run: pytest tests
+
+      - name: Build sdist and wheel
+        run: python -m build
+
+      - name: Check distributions
+        run: twine check --strict dist/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+  publish:
+    name: Publish to PyPI
+    needs: [check, build]
+    runs-on: ubuntu-latest
+    # Requires approval from the reviewers configured on the "pypi" environment.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/${{ needs.check.outputs.name }}/${{ needs.check.outputs.version }}/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  release:
+    name: Tag and create GitHub release
+    needs: [check, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create release if missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ needs.check.outputs.version }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists"
+          else
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --generate-notes
+          fi
