@@ -35,7 +35,12 @@ from .constants import TROPICAL_ZERO_BARRIER
 
 
 def TropicalZeroNode(barrier_value=TROPICAL_ZERO_BARRIER):
-    """Tropical Zero Element (for ⊕_tau). Represented as -inf (additive identity of LSE)."""
+    """
+    Tropical Zero Element (additive identity for ⊕_tau).
+    Represented numerically as ConstantNode(TROPICAL_ZERO_BARRIER) (-1e30 by default)
+    rather than IEEE -inf to prevent 0.0 * (-inf) = NaN during incidence matrix
+    multiplication (M @ z) and automatic differentiation.
+    """
     return ConstantNode(barrier_value)
 
 

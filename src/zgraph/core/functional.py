@@ -9,8 +9,8 @@ def marginalize(
     tau: Union[float, jax.Array] = 1.0,
 ) -> jax.Array:
     """
-    The stateless mathematical core of the ZGraph engine.
-    Executes the soft-tropical LogSumExp reduction:
+    Stateless mathematical core of the ZGraph engine.
+    Executes the shifted soft-tropical LogSumExp reduction:
         z^+ = tau * LSE(branch_potentials / tau)
             = z_max^+ + tau * ln(sum_i exp((branch_potentials_i - z_max^+) / tau))
 
@@ -24,13 +24,12 @@ def marginalize(
     Returns:
         jax.Array: The scalar outgoing log-potential z^+. Shape: (...,)
     """
-    # Static compile-time bypass for K=1 (resolved at JIT trace time, zero runtime overhead)
+    # Static compile-time bypass for K=1 (resolved at JIT trace time)
     if branch_potentials.shape[-1] == 1:
         return jnp.squeeze(branch_potentials, axis=-1)
 
-    # Shifted LogSumExp decomposition (Eq. 2.6):
-    # Subtracting z_max^+ before dividing by safe_tau bounds all exponential
-    # arguments in (-inf, 0], preventing overflow across all scales tau >= 0.
+    # Shifted LogSumExp: subtracting z_max^+ before dividing by safe_tau bounds all
+    # exponential arguments in (-inf, 0], preventing overflow and 0 * inf = NaN for tau >= 0.
     z_max = jnp.max(branch_potentials, axis=-1, keepdims=True)
     all_neg_inf = jnp.isneginf(z_max)
     safe_z_max = jnp.where(all_neg_inf, 0.0, z_max)

@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "zgraph"
 version = "0.1.1"
-description = "A hardware-accelerated, differentiable soft-tropical sum-product network and convex optimization engine."
+description = "Differentiable belief propagation and convex optimization via soft-tropical sum-product networks."
 authors = [
   { name="Mike Welland", email="mike@mikewelland.com" }
 ]
 readme = "README.md"
 license = { file="LICENSE" }
 requires-python = ">=3.9"
-keywords = ["soft-tropical", "factor-graph", "sum-product-network", "jax", "convex-optimization"]
+keywords = ["soft-tropical", "factor-graph", "sum-product-network", "belief-propagation", "convex-optimization", "input-convex-neural-networks", "legendre-fenchel", "jax"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",

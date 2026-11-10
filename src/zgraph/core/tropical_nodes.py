@@ -13,8 +13,11 @@ class TropicalPolynomialNode(ZGraphNode):
     Soft-Tropical Sum-Product Node (FactorNode).
     Computes the fused soft-tropical operator:
         z^+(z) = tau * LSE(tau^{-1} M z + g)
-    by performing a linear incidence projection (z_i^+ = (M z)_i) followed by
-    a degeneracy-shifted, scale-parameterized LogSumExp reduction.
+    combining linear incidence projection (M z) with a degeneracy-shifted,
+    scale-parameterized LogSumExp reduction. For M >= 0, composition forms a
+    monotone Input-Convex Neural Network (ICNN) whose reverse-mode AD executes
+    exact sum-product belief propagation; for general real M = M^+ - M^-, it
+    forms a Difference-of-Convex (DC) network.
     """
     M: jax.Array
     tau: eqx.Module

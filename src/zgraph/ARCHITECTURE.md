@@ -1,6 +1,9 @@
 # ZGraph Architecture & Design Philosophy
 
-`zgraph` is a **Soft-Tropical Sum-Product Network (Factor Graph)** engine designed for differentiable belief propagation and convex optimization. It executes fused matrix-vector `LogSumExp` contractions, exact higher-order automatic differentiation, and Legendre-Fenchel duality using JAX and Equinox.
+`zgraph` is a **Soft-Tropical Sum-Product Network (Factor Graph)** compiler for differentiable belief propagation and convex optimization, built on JAX and Equinox:
+
+- **ICNN & DC Closure:** Each node maps child log-potentials $\mathbf{z} \in \mathbb{R}^N$ via incidence matrix $M \in \mathbb{R}^{K \times N}$, log-degeneracy $\boldsymbol{g} \in \mathbb{R}^K$, and scale $\tau \in [0, \infty)$ to $z^+(\mathbf{z}) = \tau \, \text{LSE}(\tau^{-1} M \mathbf{z} + \boldsymbol{g})$, with simplex branch probabilities $\mathbf{p} = \text{softmax}(\tau^{-1} M \mathbf{z} + \boldsymbol{g}) \in \Delta^{K-1}$, marginals $\mathbf{n} = \nabla_{\mathbf{z}} z^+ = M^T \mathbf{p}$, and PSD Hessian $\mathbf{H}_{\mathbf{z}} = \nabla^2_{\mathbf{z}} z^+ \succeq 0$. Non-negative weights ($M \ge 0$) form monotone **Input-Convex Neural Networks (ICNNs)** where reverse-mode AD (`jax.grad` / `jax.vjp`) executes exact sum-product belief propagation; general signed weights ($M \in \mathbb{R}^{K \times N}$) form **Difference-of-Convex (DC)** networks.
+- **Perspective Homogeneity:** Nodes and composite DAGs are degree-1 positively homogeneous on $(\mathbf{z}, \tau) \in \mathbb{R}^N \times [0, \infty)$, satisfying Euler's identity $z^+(\mathbf{z}) = \mathbf{z}^T \mathbf{n} + \tau (\partial z^+ / \partial \tau)$ and $z^*(\mathbf{n}) = \mathbf{z}^{*T} \mathbf{n} - z^+(\mathbf{z}^*) = -\tau (\partial z^+ / \partial \tau)$.
 
 To ensure speed and portability across platforms and hardware architectures, all code within this package MUST adhere to the following strict architectural directives. This ensures robust compilation via `jax.jit` and seamless compatibility with `jax`.
 
@@ -13,15 +16,20 @@ To ensure speed and portability across platforms and hardware architectures, all
 The `zgraph` codebase is strictly divided into three distinct categories based on their mathematical role:
 
 1. **`core/` (The Soft-Tropical Forward Pass)**
-   Contains the structural math primitives (`FactorNode`, `ProductNode`, `marginalize`). These define the topology of the graphical model:
+   Contains the structural math primitives (`FactorNode`, `ProductNode`, `marginalize`) defining the graphical model:
    $$z^+(\mathbf{z}) = \tau \, \text{LSE}\!\left(\tau^{-1} M \mathbf{z} + \boldsymbol{g}\right)$$
-   They execute the `evaluate()` pass (wrapped by `__call__()`) to compute either the collapsed scalar potential $z^+$ or the uncollapsed branch potentials $z_i^+ + \tau g_i$ via `.logits()`.
+   Executes a zero-scale-safe ($\tau \to 0^+$) shifted-`LSE` `evaluate()` pass (wrapped by `__call__()`)—with compile-time linear bypass for $K = 1$ and horizontal operator fusion (`+`, `-`, `*`, `|`)—exposing the scalar potential $z^+$, uncollapsed branch potentials $z_i^+ + \tau g_i$ (`.logits()`), and simplex probabilities $\mathbf{p}$ (`.probabilities()`).
 
 2. **`transforms/` (Graph-to-Graph Operators)**
-   Contains functional operators (`legendre_transform`, `legendre_dual`) that reshape the topology or coordinates. A transform takes a graph (`eqx.Module`) and returns a *new* `ZGraphNode` graph.
+   Contains functional operators (`legendre_transform`, `legendre_dual`) that reshape coordinates and return a *new* `ZGraphNode` graph:
+   - `legendre_transform`: Forward parametric Legendre-Fenchel transform evaluating $z^*(\mathbf{n}) = \mathbf{z}^T \mathbf{n} - z^+(\mathbf{z})$ and dual marginals $\mathbf{n} = \nabla_{\mathbf{z}} z^+$.
+   - `legendre_dual`: Inverse Legendre-Fenchel node wrapping `legendre_solve` to evaluate $z^*(\mathbf{n}) = \sup_{\mathbf{z}} \{\mathbf{z}^T \mathbf{n} - z^+(\mathbf{z})\}$ at target marginals $\mathbf{n}$.
 
 3. **`solvers/` (Execution Routines)**
-   Contains numerical and analytic search functions (`extract_decision_boundary`, `gauge_fix`, `legendre_solve`). Solvers take a **callable function** (e.g., a model or `.logits` method) and an **input domain tensor**, and execute searches or projections (finding roots, branch crossovers, conjugate potentials, or projecting onto level-sets $z^+(\mathbf{z}) = 0$).
+   Contains numerical and analytic routines (`legendre_solve`, `gauge_fix`, `extract_decision_boundary`) operating on a **callable function** and an **input domain tensor**:
+   - `legendre_solve`: Damped pseudoinverse Newton-Raphson solver on $\text{range}(\mathbf{H}_{\mathbf{z}})$ with optional gauge anchoring onto $z^+(\mathbf{z}^*) = 0$ and $\mathcal{O}(1)$-memory implicit differentiation.
+   - `gauge_fix`: Single-pass affine projection onto a target potential isosurface (default null-potential isosurface $z^+(\mathbf{z}) = 0$) along shift-equivariant directions.
+   - `extract_decision_boundary`: Hardware `jax.lax.top_k` solver locating pairwise branch crossovers $(z_i^+ + \tau g_i) = (z_j^+ + \tau g_j)$ from uncollapsed potentials with implicit differentiation sensitivities.
 
 ---
 

@@ -26,9 +26,12 @@ def _solve_legendre_single(
     z_init_sub: jax.Array,
 ) -> Tuple[jax.Array, jax.Array]:
     """
-    Single-point damped pseudoinverse Newton-Raphson solver for the Legendre-Fenchel
-    conjugate (Paper Section 3.2 & Section 4.3, Eq. 4.1):
-        z^*(n) = sup_z { z^T n - z^+(z) }
+    Single-point damped pseudoinverse Newton-Raphson solver for the convex
+    Legendre-Fenchel conjugate z^*(n) = sup_z { z^T n - z^+(z) }.
+
+    Decorated with @jax.custom_jvp so Newton iterations run off the AD tape at
+    O(1) memory cost; JAX automatically transposes the linear JVP rule into a
+    custom VJP for reverse-mode AD while supporting forward-mode and higher-order AD.
     """
     n_target = target_x[idx]
     base_x = jax.lax.stop_gradient(target_x)
@@ -103,6 +106,10 @@ def _solve_legendre_single_jvp(
     primals,
     tangents,
 ):
+    """
+    Implicit Function Theorem JVP rule, automatically transposed by JAX into a
+    VJP during reverse-mode AD (jax.grad / jax.vjp).
+    """
     model, target_x, idx, z_init_sub = primals
     d_model, d_target_x, _, _ = tangents
 
@@ -128,15 +135,14 @@ def _solve_legendre_single_jvp(
     H_z = jax.hessian(lambda z: _eval_subspace(model, target_x, idx, z))(z_star)
     H_pinv = jnp.linalg.pinv(H_z, rtol=rtol_pinv)
 
-    # Implicit Function Theorem (Eqs. 3.11 & 3.20):
-    # H_z dz^* + d_g_z_theta = dn  =>  dz^* = H_z^\dagger (dn - d_g_z_theta)
+    # Implicit Function Theorem: H_z dz^* + d_g_z_theta = dn => dz^* = H_z^\dagger (dn - d_g_z_theta)
     d_z_star = jnp.matmul(H_pinv, d_n - d_g_z_theta)
 
     if anchor_gauge:
         u = jnp.ones_like(z_star)
         c_u = jnp.dot(u, g_z)
         safe_c_u = jnp.where(jnp.abs(c_u) > 1e-12, c_u, 1.0)
-        # Tangent orthogonality on z^+(z^*, theta) = 0 (Eq. 3.15): n^T dz^* + d_phi_theta = 0
+        # Tangent orthogonality on z^+(z^*, theta) = 0: g_z^T dz^* + d_phi_theta = 0
         gauge_corr = jnp.where(
             jnp.abs(c_u) > 1e-12,
             -(jnp.dot(g_z, d_z_star) + d_phi_theta) / safe_c_u,
@@ -144,7 +150,7 @@ def _solve_legendre_single_jvp(
         )
         d_z_star = d_z_star + gauge_corr * u
 
-    # Envelope theorem (Eqs. 3.11 & 3.20): dz^* = z^{*T} dn - d_phi_theta + (n - g_z)^T dz^*
+    # Envelope theorem: dz^* = z^{*T} dn - d_phi_theta + (n - g_z)^T dz^*
     d_z_conj = jnp.dot(z_star, d_n) - d_phi_theta + jnp.dot(n_target - g_z, d_z_star)
     d_dual_x = d_x_cond.at[idx].set(d_z_star, unique_indices=True)
 
@@ -163,10 +169,15 @@ def legendre_solve(
     max_iter: int = 64,
 ) -> Tuple[jax.Array, jax.Array]:
     r"""
-    Differentiable Legendre-Fenchel solver (Paper Section 3.2 & Section 4.3).
-    Inverts a soft-tropical node or DAG from prescribed target marginals n (at
-    transform_indices of target_state) to conjugate potentials z^*(n) and
-    evaluates the convex conjugate z^*(n) = z^{*T} n - z^+(z^*).
+    Differentiable Legendre-Fenchel solver.
+    Inverts a soft-tropical node or DAG from target marginals n (at transform_indices
+    of target_state) to conjugate potentials z^*(n) and evaluates the convex conjugate
+    z^*(n) = z^{*T} n - z^+(z^*) (equal to -tau * dz^+/dtau for a full transform by
+    degree-1 perspective homogeneity).
+
+    Implicit differentiation via @jax.custom_jvp runs at O(1) memory cost and is
+    automatically transposed by JAX into a VJP for reverse-mode AD (jax.grad / jax.vjp),
+    while also supporting forward-mode AD (jax.jvp) and dual Hessians.
 
     Supports arbitrary leading batch dimensions on target_state.
 
@@ -176,7 +187,8 @@ def legendre_solve(
             at transform_indices and fixed conditioning coordinates elsewhere.
         transform_indices: Sequence of coordinate indices to invert. Defaults to all indices.
         z_init: Optional initial guess for z^* on transform_indices. Shape: (..., |I|) or (|I|,).
-        anchor_gauge: If True, shifts z^* onto the null-potential isosurface z^+(z^*) = 0.
+        anchor_gauge: If True, projects z^* onto the null-potential isosurface z^+(z^*) = 0
+            in a single pass so z^*(n) reduces to z^{*T} n.
         rtol_pinv: Relative singular-value threshold for Moore-Penrose pseudoinverse H_z^\dagger.
         tol: Convergence tolerance on the Newton decrement.
         max_iter: Maximum damped Newton-Raphson iterations.

@@ -6,12 +6,12 @@ def extract_decision_boundary(batched_logits_fn: Callable[[jax.Array], jax.Array
                               sweep_signals: jax.Array,
                               ranks: Tuple[int, int] = (0, 1)) -> Tuple[jax.Array, jax.Array]:
     """
-    Universally finds the manifold where two competing states in a categorical 
-    PGM distribution cross (w_A == w_B).
+    Extracts the decision boundary B_{ij} where two competing uncollapsed branch
+    potentials cross ((z_i^+ + tau g_i) - (z_j^+ + tau g_j) = 0) using
+    hardware-accelerated jax.lax.top_k selection.
     
-    By default (ranks=(0, 1)), it finds the **Stable Equilibrium Boundary** where 
-    the #1 most probable state and the #2 most probable state swap. 
-    You can query metastable boundaries by requesting different rank crossovers.
+    By default (ranks=(0, 1)), it finds the **Dominant Decision Boundary** where 
+    the #1 and #2 branches swap. Sub-dominant crossovers can be queried via `ranks`.
     
     Args:
         batched_logits_fn: A batched callable that takes a tensor of signals and returns logits.

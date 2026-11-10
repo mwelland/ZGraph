@@ -2,9 +2,9 @@
 
 [![Unit Tests](https://github.com/themintlab/ZGraph/actions/workflows/unit-tests.yml/badge.svg?branch=main)](https://github.com/themintlab/ZGraph/actions/workflows/unit-tests.yml)
 
-**A hardware-accelerated, fully differentiable, physics-free soft-tropical sum-product graph engine.**
+**Differentiable Belief Propagation and Convex Optimization via Soft-Tropical Sum-Product Networks.**
 
-`zgraph` is a low-level, high-performance numerical kernel engine built natively on JAX and Equinox (`jax.jit`, `jax.vmap`, `jax.grad`). It compiles hierarchical factor graph contractions, soft-tropical marginalizations, and convex optimization problems into homogeneous chains of parameterized $\text{LogSumExp}$ ($\text{LSE}$) matrix operations.
+`zgraph` is a hardware-accelerated, domain-agnostic graph compiler built on JAX and Equinox (`jax.jit`, `jax.vmap`, `jax.grad`). It compiles hierarchical factor-graph contractions, sum-product belief propagation, and Legendre-Fenchel optimization into directed acyclic graphs (DAGs) of fused soft-tropical $\text{LogSumExp}$ ($\text{LSE}$) operators—unifying monotone **Input-Convex Neural Networks (ICNNs)** ($M \ge 0$) and **Difference-of-Convex (DC) networks** ($M \in \mathbb{R}^{K \times N}$).
 
 ---
 
@@ -34,16 +34,20 @@ All physical nomenclature, thermodynamic ensembles, chemical potential mappings 
 By enforcing pure tensor-only signatures (`__call__(signals: Array) -> Array`), `zgraph` guarantees zero graph breaks during JIT compilation. Nodes do not store string names, metadata dicts, or conditional Python logic.
 
 ### 2. Soft-Tropical Sum-Product Algebra
-Every node maps incoming child log-potentials $\mathbf{z} \in \mathbb{R}^N$ via incidence matrix $M \in \mathbb{R}^{K \times N}$, log-degeneracy bias $\boldsymbol{g} \in \mathbb{R}^K$, and scale parameter $\tau \in [0, \infty)$ into a scalar outgoing log-potential $z^+$:
+Every node maps incoming child log-potentials $\mathbf{z} \in \mathbb{R}^N$ via incidence matrix $M \in \mathbb{R}^{K \times N}$, log-degeneracy bias $\boldsymbol{g} \in \mathbb{R}^K$, and scale $\tau \in [0, \infty)$ into a scalar log-potential:
 $$z^+(\mathbf{z}) = \tau \, \text{LogSumExp}\!\left( \tau^{-1} M \mathbf{z} + \boldsymbol{g} \right)$$
-where $\tau$ controls the smoothing transition between exact hard-tropical selection ($\tau \to 0^+$, $\max_i (M\mathbf{z})_i$) and smooth statistical marginalization ($\tau > 0$).
+- **Zero-Scale Limit ($\tau \to 0^+$):** Shifted-$\text{LSE}$ evaluation smoothly deforms sum-product marginalization ($\tau > 0$) into hard-tropical selection $\max_i (M\mathbf{z})_i$ ($\tau = 0$) without overflow or `NaN`s.
+- **Perspective Homogeneity:** $z^+(\mathbf{z}, \tau)$ is degree-1 positively homogeneous on $\mathbb{R}^N \times [0, \infty)$ and satisfies Euler's decomposition $z^+(\mathbf{z}) = \mathbf{z}^T \mathbf{n} + \tau (\partial z^+ / \partial \tau)$ across composite DAGs.
+- **ICNN & DC Closure:** Non-negative incidence weights ($M \ge 0$) yield globally monotone **Input-Convex Neural Networks (ICNNs)**; arbitrary real weights ($M = M^+ - M^-$) form **Difference-of-Convex (DC)** networks.
 
-### 3. Hardware-Native Execution
-Engine nodes (`FactorNode`, `ConstantNode`, `SignalNode`) are engineered to compile seamlessly via `jax.jit` into fused XLA kernels. Vectorization across spatial grids or multi-dimensional parameter ensembles (`Ensemble`) is handled automatically via `vmap`.
+### 3. Hardware-Native Compilation & Ensemble UQ
+Engine nodes (`FactorNode`, `ProductNode`, `ConstantNode`, `SignalNode`) compile via `jax.jit` into fused XLA kernels with compile-time linear bypass for single-branch ($K = 1$) nodes, horizontal operator fusion (`+`, `-`, `*`, `|`), and automatic `vmap` vectorization across state batches and `Ensemble` parameter distributions.
 
-### 4. End-to-End Differentiability & Legendre-Fenchel Duality
-Built for direct integration with JAX's autodiff engine, `zgraph` provides exact analytical marginals and susceptibilities ($\mathbf{n} = \nabla_{\mathbf{z}} z^+$, $\mathbf{H}_{\mathbf{z}} = \nabla^2_{\mathbf{z}} z^+$) as well as both forward parametric (`legendre_transform`) and iterative inverse (`legendre_solve`, `legendre_dual`) Legendre-Fenchel duality:
+### 4. Belief Propagation, Legendre-Fenchel Duality, & Boundary Solvers
+- **Reverse-Mode AD = Exact Belief Propagation:** With simplex branch probabilities $\mathbf{p} = \text{softmax}(\tau^{-1} M \mathbf{z} + \boldsymbol{g}) \in \Delta^{K-1}$, local marginals $\mathbf{n} = \nabla_{\mathbf{z}} z^+ = M^T \mathbf{p}$, and PSD susceptibility $\mathbf{H}_{\mathbf{z}} = \nabla^2_{\mathbf{z}} z^+ \succeq 0$, reverse-mode AD (`jax.grad` / `jax.vjp`) executes exact sum-product belief propagation in one backward sweep.
+- **Convex Legendre-Fenchel Duality:** Provides both forward parametric transforms (`legendre_transform`) and damped pseudoinverse Newton-Raphson inversion (`legendre_solve`, `legendre_dual`) with $\mathcal{O}(1)$-memory implicit differentiation:
 $$z^*(\mathbf{n}) = \sup_{\mathbf{z}} \left\{ \mathbf{z}^T \mathbf{n} - z^+(\mathbf{z}) \right\}$$
+- **Isosurface & Crossover Solvers:** `gauge_fix` projects potentials onto the null-potential isosurface $z^+(\mathbf{z}) = 0$ in a single pass along shift-equivariant directions, and `extract_decision_boundary` locates pairwise branch crossovers from uncollapsed potentials $\{z_i^+ + \tau g_i\}$ via `jax.lax.top_k` with implicit sensitivities.
 
 ---
 
@@ -89,4 +93,6 @@ Explore interactive Jupyter notebooks running natively on Google Colab:
 
 ## Application Layer
 
-For thermodynamic potential evaluation, materials modeling, phase diagram construction, and user-facing APIs, please see the [**ThermoGraph**](https://github.com/themintlab/ThermoGraph) repository.
+`zgraph` supports hierarchical factor-graph modeling across diverse domains, including deep branching transport (adjoint importance and criticality on $z^+(\mathbf{z}) = 0$) and multiscale statistical mechanics (cluster and super-cell partition networks).
+
+For thermodynamic potential evaluation, CALPHAD materials modeling, phase diagram construction, and user-facing APIs built on `zgraph`, see the [**ThermoGraph**](https://github.com/themintlab/ThermoGraph) repository.
