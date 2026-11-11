@@ -5,10 +5,10 @@ import equinox as eqx
 
 class Ensemble(eqx.Module):
     """
-    A lightweight wrapper that tags a JAX array as an uncertainty distribution (ensemble)
-    rather than a physical vector constant.
-    The _execute_vectorized interceptor recursively scans ZGraph PyTrees for this wrapper
-    and automatically builds the in_axes mask to execute jax.vmap.
+    Lightweight wrapper tagging a JAX array as a parameter uncertainty ensemble
+    with leading sample dimension S rather than a vector constant.
+    ZGraphNode._execute_vectorized detects Ensemble leaves and vectorizes over S
+    via eqx.filter_vmap / jax.vmap.
     """
     array: jax.Array
 
@@ -40,15 +40,13 @@ class BatchProxy:
 
 
 class ZGraphNode(eqx.Module):
-    """
-    The universal base class for all nodes in the ZGraph framework.
-    """
+    """Universal base functor class for all nodes in the ZGraph framework."""
 
     def _execute_vectorized(self, method_name: str, signals: jax.Array, signal_ndim: int = 1, **kwargs):
         """
-        The core interceptor that dynamically applies eqx.filter_vmap and jax.vmap.
-        Inside the mapped function, Ensemble wrappers are stripped away, allowing
-        the underlying method to remain purely scalar and pristine.
+        Core interceptor that dynamically applies eqx.filter_vmap and jax.vmap
+        across state batches and Ensemble parameter realizations, unwrapping
+        Ensemble leaves so node methods remain purely scalar.
         """
         is_batched = getattr(signals, "ndim", 0) > signal_ndim
 

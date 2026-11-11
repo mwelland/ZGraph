@@ -12,7 +12,7 @@ def apply_gauge_shift(
 ) -> jax.Array:
     """
     Pure subfunction to project state coordinates onto the target potential manifold
-    z^+(z + alpha^* u) = target_val along shift_idx with affine gain c_u (Eq. 3.14):
+    z^+(z + alpha^* u) = target_val along shift_idx with affine gain c_u:
         alpha^* = (target_val - raw_phi) / c_u
 
     Args:
@@ -42,7 +42,8 @@ def find_crossover_indices(
     ranks: Tuple[int, int] = (0, 1),
 ) -> Tuple[jax.Array, jax.Array]:
     """
-    Pure subfunction to find the tensor indices where two rank-ordered branches cross.
+    Pure subfunction to find the tensor indices where two rank-ordered uncollapsed
+    branches cross via jax.lax.top_k.
 
     Args:
         batched_logits (jax.Array): Evaluated uncollapsed branch potentials across a sweep.

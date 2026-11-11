@@ -11,8 +11,7 @@ def apply_legendre(
 ) -> Tuple[jax.Array, jax.Array]:
     """
     Pure subfunction to compute the multivariate Legendre-Fenchel conjugate
-    evaluated parametrically at primal_x using the standard convex Fenchel sign
-    (Paper Eq. 3.9 - 3.10):
+    evaluated parametrically at primal_x using the standard convex Fenchel sign:
         z^*(n) = z^T n - z^+(z)
 
     Args:

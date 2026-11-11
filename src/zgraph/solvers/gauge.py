@@ -14,12 +14,12 @@ def gauge_fix(
     c_u: Optional[Union[float, jax.Array]] = None,
 ) -> jax.Array:
     """
-    Projects input states onto a target potential isosurface (default z^+(z) = 0.0)
-    in a single pass via Eq. (3.14):
+    Projects input states onto a target potential isosurface (default null-potential
+    isosurface z^+(z) = 0.0) in a single O(1) pass:
         alpha^*(z) = (target_val - z^+(z)) / c_u,   z_proj = z + alpha^*(z) u
 
-    When c_u is not explicitly provided, both z^+(z) and the directional coupling
-    c_u = u^T grad_z z^+(z) are evaluated in a single forward-mode AD (jax.jvp) pass.
+    When c_u is not explicitly provided, both z^+(z) and the directional shift-equivariance
+    coupling c_u = u^T grad_z z^+(z) are evaluated in a single forward-mode AD (jax.jvp) pass.
 
     Args:
         compiled_model_fn: A compiled graph or forward callable.

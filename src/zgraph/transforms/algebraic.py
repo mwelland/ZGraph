@@ -15,8 +15,9 @@ class LegendreTransform(ZGraphNode):
     """
     Parametric Legendre-Fenchel Transform Node.
     Evaluates a base module at primal coordinates x, returning the convex conjugate
-    value z^* = x_I^T grad_{x_I} z^+(x) - z^+(x) and dual coordinate vector (with
-    grad_{x_I} z^+(x) placed at transform_indices).
+    z^* = x_I^T grad_{x_I} z^+(x) - z^+(x) (equal to -tau * dz^+/dtau for a full
+    transform by degree-1 perspective homogeneity) and the dual coordinate vector
+    (with grad_{x_I} z^+(x) placed at transform_indices).
 
     Inherits from ZGraphNode for automatic multi-dimensional batching and Ensemble UQ.
     """
@@ -35,7 +36,7 @@ class LegendreTransform(ZGraphNode):
 
 class LegendreDualNode(ZGraphNode):
     """
-    Inverse Legendre-Fenchel Dual Node (Paper Section 3.2 & Section 4.3).
+    Inverse Legendre-Fenchel Dual Node.
     Takes prescribed target marginals n at transform_indices (and conditioning
     signals elsewhere), solves grad_z z^+(z^*) = n via damped pseudoinverse
     Newton-Raphson iteration, and returns the scalar conjugate potential z^*(n).
